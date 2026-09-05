@@ -12,14 +12,24 @@ Tabung Haji / Emergency / Gold / Public Mutual investments.
 Shopping, Gym — editable budget caps at any time.
 
 **Core mechanics:**
-- Payday engine resets category spend to zero and applies a fixed-amount
-  salary distribution on the 27th of each month (pure date-check on app open —
-  no server/cron involved).
+- Payday engine: on the 27th of each month, your salary (an editable fixed amount,
+  default RM 3,700) is deposited into Maybank Savings, and every category's spend
+  counter resets to zero. Budget caps themselves don't reset — they stay fixed until
+  you change them.
+- Logging a spend asks which account or credit card it came from — debit/savings
+  accounts get the amount deducted automatically, credit cards get their unpaid
+  balance increased automatically. You never re-key account balances by hand for
+  day-to-day spending; the Accounts tab is for manual corrections only (e.g. after
+  reconciling a real statement).
 - Net card liquidity widget: `UOB Savings balance − sum of 4 credit card
   unpaid balances`.
-- History tab lets you flip back through prior payday periods.
-- Balances update via a fast manual quick-entry sheet (there is no live bank
-  API integration — see "Why no auto-import" below).
+- Home dashboard includes a live spending pie chart (by category, with % breakdown), a
+  category list with icons, and a recent-activity feed grouped by date.
+- Every logged spend can carry an optional note ("Lunch with client", "Petrol top-up") —
+  shown in the activity feed instead of just the category name.
+- History tab flips back through prior payday periods, each with its own pie chart and
+  full itemized transaction list (with notes), not just totals.
+- There is no live bank API integration — see "Why no auto-import" below.
 
 ---
 

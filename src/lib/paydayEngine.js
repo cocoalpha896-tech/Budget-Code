@@ -33,8 +33,11 @@ export function rollPeriodIfNeeded(data) {
   let changed = false;
 
   if (!next.currentPeriod?.start || !next.currentPeriod?.end) {
-    next.currentPeriod = getPeriodForDate(today, next.payday.dayOfMonth);
+    next.currentPeriod = { ...getPeriodForDate(today, next.payday.dayOfMonth), transactions: [] };
     return { data: next, changed: true };
+  }
+  if (!next.currentPeriod.transactions) {
+    next.currentPeriod.transactions = []; // migrate older saved files that predate this field
   }
 
   while (new Date(next.currentPeriod.end) <= today) {
@@ -45,16 +48,14 @@ export function rollPeriodIfNeeded(data) {
       start: next.currentPeriod.start,
       end: next.currentPeriod.end,
       categories: next.categories.map((c) => ({ ...c })),
+      transactions: (next.currentPeriod.transactions || []).map((t) => ({ ...t })),
       ccLiquidity: computeCCLiquidity(next),
       totalSpent,
     });
 
-    // Apply fixed-amount salary distribution
-    next.payday.distribution.forEach((d) => {
-      const list = d.targetType === 'bank' ? next.accounts.banks : next.accounts.investments;
-      const acct = list.find((a) => a.id === d.targetId);
-      if (acct) acct.balance += Number(d.amount) || 0;
-    });
+    // Salary lands in one account only
+    const target = next.accounts.banks.find((a) => a.id === next.payday.targetAccountId);
+    if (target) target.balance += Number(next.payday.salaryAmount) || 0;
 
     // Reset category spend, keep the edited budget caps
     next.categories = next.categories.map((c) => ({ ...c, spent: 0 }));
@@ -62,7 +63,7 @@ export function rollPeriodIfNeeded(data) {
     // Advance to the following period
     const dayAfterOldEnd = new Date(new Date(next.currentPeriod.end).getTime() + 86400000);
     const newBounds = getPeriodForDate(dayAfterOldEnd, next.payday.dayOfMonth);
-    next.currentPeriod = { start: next.currentPeriod.end, end: newBounds.end };
+    next.currentPeriod = { start: next.currentPeriod.end, end: newBounds.end, transactions: [] };
 
     changed = true;
   }

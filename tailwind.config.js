@@ -23,6 +23,7 @@ export default {
       },
       fontFamily: {
         sans: [
+          '"Plus Jakarta Sans Variable"',
           '-apple-system',
           'BlinkMacSystemFont',
           'San Francisco',

@@ -9,6 +9,10 @@ html, body, #root {
 body {
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
+  background:
+    radial-gradient(140% 60% at 50% -10%, rgba(45,212,191,0.10) 0%, transparent 60%),
+    radial-gradient(120% 60% at 100% 0%, rgba(129,140,248,0.08) 0%, transparent 55%),
+    #12141A;
 }
 
 .tabular-nums {

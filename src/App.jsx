@@ -6,6 +6,7 @@ import HomeView from './components/HomeView';
 import BudgetsView from './components/BudgetsView';
 import AccountsView from './components/AccountsView';
 import HistoryView from './components/HistoryView';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const SYNC_LABEL = {
   idle: '',
@@ -41,10 +42,10 @@ export default function App() {
         </button>
       </header>
 
-      {tab === 'home' && <HomeView data={data} updateData={updateData} />}
-      {tab === 'budgets' && <BudgetsView data={data} updateData={updateData} />}
-      {tab === 'accounts' && <AccountsView data={data} updateData={updateData} />}
-      {tab === 'history' && <HistoryView data={data} />}
+      {tab === 'home' && <ErrorBoundary><HomeView data={data} updateData={updateData} /></ErrorBoundary>}
+      {tab === 'budgets' && <ErrorBoundary><BudgetsView data={data} updateData={updateData} /></ErrorBoundary>}
+      {tab === 'accounts' && <ErrorBoundary><AccountsView data={data} updateData={updateData} /></ErrorBoundary>}
+      {tab === 'history' && <ErrorBoundary><HistoryView data={data} /></ErrorBoundary>}
 
       <BottomNav active={tab} onChange={setTab} />
     </div>

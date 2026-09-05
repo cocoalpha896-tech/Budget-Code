@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import SpendingPieChart from './SpendingPieChart';
+import ActivityList from './ActivityList';
 
 function formatMYR(n) {
   const sign = n < 0 ? '-' : '';
@@ -44,12 +46,10 @@ export default function HistoryView({ data }) {
         </button>
       </div>
 
-      <div className="flex justify-between border-y border-ink-border px-5 py-3.5">
-        <span className="text-sm text-ink-muted">Total spent</span>
-        <span className="text-sm font-medium tabular-nums text-ink-text">
-          {formatMYR(period.totalSpent)}
-        </span>
+      <div className="border-y border-ink-border">
+        <SpendingPieChart categories={period.categories} title={period.period} />
       </div>
+
       <div className="flex justify-between border-b border-ink-border px-5 py-3.5">
         <span className="text-sm text-ink-muted">CC liquidity at reset</span>
         <span
@@ -77,6 +77,13 @@ export default function HistoryView({ data }) {
           </span>
         </div>
       ))}
+
+      <div className="px-5 pb-2 pt-6 text-sm font-medium text-ink-text">All spending this period</div>
+      <ActivityList
+        transactions={period.transactions}
+        categories={period.categories}
+        emptyLabel="No itemized entries were saved for this period"
+      />
     </div>
   );
 }

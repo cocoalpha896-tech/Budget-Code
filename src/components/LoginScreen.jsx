@@ -8,7 +8,7 @@ export default function LoginScreen({ onSignIn, error }) {
 
       <button
         onClick={onSignIn}
-        className="w-full max-w-xs rounded-xl bg-accent py-3.5 text-sm font-medium text-ink-bg active:opacity-80"
+        className="w-full max-w-xs rounded-xl bg-gradient-to-r from-accent to-sky-400 py-3.5 text-sm font-semibold text-ink-bg active:opacity-80"
       >
         Sign in with Google
       </button>

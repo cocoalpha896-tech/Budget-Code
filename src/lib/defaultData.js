@@ -35,23 +35,42 @@ export function makeDefaultData() {
     ],
     payday: {
       dayOfMonth: 27,
-      // Fixed-amount distribution per your answer. Edit target amounts in Settings.
-      // targetType is 'bank' or 'investment', targetId matches an id above.
-      distribution: [
-        { targetType: 'bank', targetId: 'mae', amount: 0 },
-        { targetType: 'bank', targetId: 'rhb', amount: 0 },
-        { targetType: 'bank', targetId: 'tng', amount: 0 },
-        { targetType: 'bank', targetId: 'uob_savings', amount: 0 },
-        { targetType: 'investment', targetId: 'tabung_haji', amount: 0 },
-        { targetType: 'investment', targetId: 'emergency', amount: 0 },
-        { targetType: 'investment', targetId: 'gold', amount: 0 },
-        { targetType: 'investment', targetId: 'public_mutual', amount: 0 },
-      ],
+      // Salary lands in one account (Maybank Savings) — editable amount, fixed destination.
+      salaryAmount: 3700,
+      targetAccountId: 'mb_savings',
     },
     currentPeriod: {
       start: null,
       end: null,
+      // Individual logged spends: { id, categoryId, amount, note, date, accountId, accountType }
+      // accountType is 'bank' or 'creditCard' — this is what drives automatic balance
+      // deduction / credit card owed-amount tracking, so nothing needs manual re-entry.
+      transactions: [],
     },
     history: [],
+  };
+}
+
+// Fills in any fields missing from an older saved budget_data.json (e.g. one
+// created before the salary/transactions model existed) with sane defaults,
+// instead of letting the app crash on a missing field.
+export function migrateData(data) {
+  const fresh = makeDefaultData();
+  return {
+    ...fresh,
+    ...data,
+    accounts: data.accounts ?? fresh.accounts,
+    categories: data.categories ?? fresh.categories,
+    payday: {
+      dayOfMonth: data.payday?.dayOfMonth ?? fresh.payday.dayOfMonth,
+      salaryAmount: data.payday?.salaryAmount ?? fresh.payday.salaryAmount,
+      targetAccountId: data.payday?.targetAccountId ?? fresh.payday.targetAccountId,
+    },
+    currentPeriod: {
+      start: data.currentPeriod?.start ?? null,
+      end: data.currentPeriod?.end ?? null,
+      transactions: data.currentPeriod?.transactions ?? [],
+    },
+    history: data.history ?? [],
   };
 }

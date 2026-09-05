@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { initAuth, requestToken, getValidStoredToken, signOut as gSignOut } from './googleAuth';
 import { findBudgetFile, createBudgetFile, readBudgetFile, updateBudgetFile } from './driveApi';
-import { makeDefaultData } from './defaultData';
+import { makeDefaultData, migrateData } from './defaultData';
 import { rollPeriodIfNeeded } from './paydayEngine';
 
 const SAVE_DEBOUNCE_MS = 1500;
@@ -42,7 +42,8 @@ export function useBudgetStore() {
         loaded = fresh;
       } else {
         fileIdRef.current = file.id;
-        loaded = await readBudgetFile(token, file.id);
+        const raw = await readBudgetFile(token, file.id);
+        loaded = migrateData(raw);
       }
 
       const { data: rolled, changed } = rollPeriodIfNeeded(loaded);
