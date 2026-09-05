@@ -1,92 +1,432 @@
-import { useState } from 'react';
-import QuickEntrySheet from './QuickEntrySheet';
+import React, { useState } from 'react';
+import { ArrowLeftRight, CreditCard, PlusCircle, X, Building2, TrendingUp } from 'lucide-react';
+import { useBudgetStore } from '../lib/useBudgetStore';
 
-function formatMYR(n) {
-  const sign = n < 0 ? '-' : '';
-  return `${sign}RM ${Math.abs(n).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+export default function AccountsView() {
+  const { data, executeTransfer, executeCardPayment, executeIncome } = useBudgetStore();
 
-function AccountRow({ label, sub, value, onTap }) {
-  return (
-    <button
-      onClick={onTap}
-      className="flex w-full items-center justify-between border-b border-ink-border px-5 py-3.5 text-left active:bg-ink-surface"
-    >
-      <div>
-        <div className="text-sm text-ink-text">{label}</div>
-        {sub && <div className="text-xs text-ink-muted">{sub}</div>}
-      </div>
-      <span className="text-sm tabular-nums text-ink-text">{formatMYR(value)}</span>
-    </button>
-  );
-}
+  // Modal display states
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showCardModal, setShowCardModal] = useState(false);
+  const [showIncomeModal, setShowIncomeModal] = useState(false);
 
-export default function AccountsView({ data, updateData }) {
-  // target = { group: 'banks' | 'creditCards' | 'investments', id, field }
-  const [target, setTarget] = useState(null);
+  // Form states - Transfer
+  const [fromAccountId, setFromAccountId] = useState('');
+  const [toAccountId, setToAccountId] = useState('');
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferNote, setTransferNote] = useState('');
 
-  const currentValue = () => {
-    if (!target) return 0;
-    const acct = data.accounts[target.group].find((a) => a.id === target.id);
-    return acct ? acct[target.field] : 0;
+  // Form states - Credit Card Payment
+  const [creditCardId, setCreditCardId] = useState('');
+  const [paidFromAccountId, setPaidFromAccountId] = useState('');
+  const [cardAmount, setCardAmount] = useState('');
+  const [cardNote, setCardNote] = useState('');
+
+  // Form states - Income
+  const [incomeAccountId, setIncomeAccountId] = useState('');
+  const [incomeAmount, setIncomeAmount] = useState('');
+  const [incomeNote, setIncomeNote] = useState('');
+
+  const banks = data?.accounts?.banks || [];
+  const creditCards = data?.accounts?.creditCards || [];
+  const investments = data?.accounts?.investments || [];
+  const depositAccounts = [...banks, ...investments];
+
+  // Open Handlers
+  const handleOpenTransfer = () => {
+    setFromAccountId(banks[0]?.id || '');
+    setToAccountId(investments[0]?.id || banks[1]?.id || '');
+    setTransferAmount('');
+    setTransferNote('');
+    setShowTransferModal(true);
   };
 
-  const save = (amount) => {
-    updateData((prev) => ({
-      ...prev,
-      accounts: {
-        ...prev.accounts,
-        [target.group]: prev.accounts[target.group].map((a) =>
-          a.id === target.id ? { ...a, [target.field]: amount } : a
-        ),
-      },
-    }));
+  const handleOpenCardModal = (defaultCardId = '') => {
+    const targetCard = creditCards.find((c) => c.id === defaultCardId) || creditCards[0];
+    setCreditCardId(targetCard?.id || '');
+    setPaidFromAccountId(banks[0]?.id || '');
+    setCardAmount(targetCard ? (targetCard.unpaidBalance ?? targetCard.balance ?? 0).toString() : '');
+    setCardNote('');
+    setShowCardModal(true);
+  };
+
+  const handleOpenIncome = () => {
+    setIncomeAccountId(banks[0]?.id || '');
+    setIncomeAmount('');
+    setIncomeNote('');
+    setShowIncomeModal(true);
+  };
+
+  // Submit Handlers
+  const onTransferSubmit = (e) => {
+    e.preventDefault();
+    if (!fromAccountId || !toAccountId || !transferAmount || fromAccountId === toAccountId) return;
+    executeTransfer({ fromAccountId, toAccountId, amount: parseFloat(transferAmount), note: transferNote });
+    setShowTransferModal(false);
+  };
+
+  const onCardPaymentSubmit = (e) => {
+    e.preventDefault();
+    if (!creditCardId || !paidFromAccountId || !cardAmount) return;
+    executeCardPayment({ creditCardId, paidFromAccountId, amount: parseFloat(cardAmount), note: cardNote });
+    setShowCardModal(false);
+  };
+
+  const onIncomeSubmit = (e) => {
+    e.preventDefault();
+    if (!incomeAccountId || !incomeAmount) return;
+    executeIncome({ accountId: incomeAccountId, amount: parseFloat(incomeAmount), note: incomeNote });
+    setShowIncomeModal(false);
   };
 
   return (
-    <div className="pb-24">
-      <div className="px-5 pt-6 pb-2 text-lg font-semibold text-ink-text">Bank accounts</div>
-      {data.accounts.banks.map((b) => (
-        <AccountRow
-          key={b.id}
-          label={b.name}
-          sub={b.note}
-          value={b.balance}
-          onTap={() => setTarget({ group: 'banks', id: b.id, field: 'balance' })}
-        />
-      ))}
-
-      <div className="px-5 pt-8 pb-2 text-lg font-semibold text-ink-text">Credit cards</div>
-      <p className="px-5 pb-3 text-xs text-ink-muted">Unpaid balance as of your last statement.</p>
-      {data.accounts.creditCards.map((c) => (
-        <AccountRow
-          key={c.id}
-          label={c.name}
-          value={c.unpaidBalance}
-          onTap={() => setTarget({ group: 'creditCards', id: c.id, field: 'unpaidBalance' })}
-        />
-      ))}
-
-      <div className="px-5 pt-8 pb-2 text-lg font-semibold text-ink-text">
-        Investments &amp; savings
+    <div className="space-y-6 pb-24">
+      {/* Quick Action Header */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-ink-text">Accounts</h2>
+        <div className="flex gap-1.5">
+          <button
+            onClick={handleOpenIncome}
+            className="flex items-center gap-1 px-2.5 py-2 text-xs font-semibold rounded-xl bg-status-good/20 text-status-good border border-status-good/30 active:scale-95 transition-transform"
+          >
+            <PlusCircle className="w-4 h-4" />
+            Income
+          </button>
+          <button
+            onClick={handleOpenTransfer}
+            className="flex items-center gap-1 px-2.5 py-2 text-xs font-semibold rounded-xl bg-ink-surface text-accent border border-ink-border active:scale-95 transition-transform"
+          >
+            <ArrowLeftRight className="w-4 h-4" />
+            Transfer
+          </button>
+          <button
+            onClick={() => handleOpenCardModal()}
+            className="flex items-center gap-1 px-2.5 py-2 text-xs font-semibold rounded-xl bg-accent text-ink-bg active:scale-95 transition-transform"
+          >
+            <CreditCard className="w-4 h-4" />
+            Pay Card
+          </button>
+        </div>
       </div>
-      {data.accounts.investments.map((i) => (
-        <AccountRow
-          key={i.id}
-          label={i.name}
-          value={i.balance}
-          onTap={() => setTarget({ group: 'investments', id: i.id, field: 'balance' })}
-        />
-      ))}
 
-      <QuickEntrySheet
-        open={!!target}
-        title="Update balance"
-        subtitle="Enter the new total, not the change"
-        confirmLabel="Save balance"
-        onConfirm={save}
-        onClose={() => setTarget(null)}
-      />
+      {/* Bank & Savings Accounts */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-ink-muted">
+          <Building2 className="w-4 h-4 text-accent" />
+          Bank Accounts & Savings
+        </div>
+        <div className="grid gap-2">
+          {banks.map((acc) => (
+            <div key={acc.id} className="flex items-center justify-between p-4 rounded-2xl bg-ink-surface border border-ink-border">
+              <div>
+                <p className="font-semibold text-ink-text text-sm">{acc.name}</p>
+                <p className="text-xs text-ink-muted">Liquid Account</p>
+              </div>
+              <p className="text-base font-bold text-status-good">
+                RM {(acc.balance || 0).toLocaleString('en-MY', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Credit Cards */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-ink-muted">
+          <div className="flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-status-warn" />
+            Credit Cards (Unpaid Balance)
+          </div>
+        </div>
+        <div className="grid gap-2">
+          {creditCards.map((card) => {
+            const bal = card.unpaidBalance ?? card.balance ?? 0;
+            return (
+              <div key={card.id} className="flex items-center justify-between p-4 rounded-2xl bg-ink-surface border border-ink-border">
+                <div>
+                  <p className="font-semibold text-ink-text text-sm">{card.name}</p>
+                  <button onClick={() => handleOpenCardModal(card.id)} className="mt-1 text-xs text-accent underline font-medium">
+                    Pay off card
+                  </button>
+                </div>
+                <p className="text-base font-bold text-status-bad">
+                  RM {bal.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Investments & Other */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-ink-muted">
+          <TrendingUp className="w-4 h-4 text-accent" />
+          Investments & Allocations
+        </div>
+        <div className="grid gap-2">
+          {investments.map((inv) => (
+            <div key={inv.id} className="flex items-center justify-between p-4 rounded-2xl bg-ink-surface border border-ink-border">
+              <p className="font-semibold text-ink-text text-sm">{inv.name}</p>
+              <p className="text-base font-bold text-ink-text">
+                RM {(inv.balance || 0).toLocaleString('en-MY', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* --- ADD INCOME MODAL --- */}
+      {showIncomeModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-ink-text flex items-center gap-2">
+                <PlusCircle className="w-5 h-5 text-status-good" />
+                Add Income / Money In
+              </h3>
+              <button onClick={() => setShowIncomeModal(false)} className="p-2 rounded-full text-ink-muted hover:text-ink-text">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={onIncomeSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Deposit To Account</label>
+                <select
+                  value={incomeAccountId}
+                  onChange={(e) => setIncomeAccountId(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-ink-bg border border-ink-border text-ink-text text-sm focus:outline-none focus:border-accent"
+                >
+                  {depositAccounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} (RM {(acc.balance || 0).toFixed(2)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Amount (RM)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  required
+                  value={incomeAmount}
+                  onChange={(e) => setIncomeAmount(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-ink-bg border border-ink-border text-ink-text text-sm focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Note / Description</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Freelance project, Claim refund"
+                  value={incomeNote}
+                  onChange={(e) => setIncomeNote(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-ink-bg border border-ink-border text-ink-text text-sm focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowIncomeModal(false)}
+                  className="w-1/2 py-3 rounded-xl bg-ink-bg text-ink-muted text-sm font-semibold border border-ink-border"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="w-1/2 py-3 rounded-xl bg-status-good text-ink-bg text-sm font-bold active:scale-95 transition-transform">
+                  Add Funds
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- TRANSFER MONEY MODAL --- */}
+      {showTransferModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-ink-text flex items-center gap-2">
+                <ArrowLeftRight className="w-5 h-5 text-accent" />
+                Transfer Money
+              </h3>
+              <button onClick={() => setShowTransferModal(false)} className="p-2 rounded-full text-ink-muted hover:text-ink-text">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={onTransferSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-ink-muted mb-1">From Account</label>
+                <select
+                  value={fromAccountId}
+                  onChange={(e) => setFromAccountId(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-ink-bg border border-ink-border text-ink-text text-sm focus:outline-none focus:border-accent"
+                >
+                  {depositAccounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} (RM {(acc.balance || 0).toFixed(2)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Transfer To</label>
+                <select
+                  value={toAccountId}
+                  onChange={(e) => setToAccountId(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-ink-bg border border-ink-border text-ink-text text-sm focus:outline-none focus:border-accent"
+                >
+                  {depositAccounts
+                    .filter((acc) => acc.id !== fromAccountId)
+                    .map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} (RM {(acc.balance || 0).toFixed(2)})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Amount (RM)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  required
+                  value={transferAmount}
+                  onChange={(e) => setTransferAmount(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-ink-bg border border-ink-border text-ink-text text-sm focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Note (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Salary transfer to Tabung Haji"
+                  value={transferNote}
+                  onChange={(e) => setTransferNote(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-ink-bg border border-ink-border text-ink-text text-sm focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowTransferModal(false)}
+                  className="w-1/2 py-3 rounded-xl bg-ink-bg text-ink-muted text-sm font-semibold border border-ink-border"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="w-1/2 py-3 rounded-xl bg-accent text-ink-bg text-sm font-bold active:scale-95 transition-transform">
+                  Confirm Transfer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- CREDIT CARD PAYMENT MODAL --- */}
+      {showCardModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-ink-text flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-status-warn" />
+                Pay Credit Card
+              </h3>
+              <button onClick={() => setShowCardModal(false)} className="p-2 rounded-full text-ink-muted hover:text-ink-text">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={onCardPaymentSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Credit Card to Pay</label>
+                <select
+                  value={creditCardId}
+                  onChange={(e) => {
+                    setCreditCardId(e.target.value);
+                    const card = creditCards.find((c) => c.id === e.target.value);
+                    if (card) setCardAmount((card.unpaidBalance ?? card.balance ?? 0).toString());
+                  }}
+                  className="w-full p-3 rounded-xl bg-ink-bg border border-ink-border text-ink-text text-sm focus:outline-none focus:border-accent"
+                >
+                  {creditCards.map((card) => {
+                    const bal = card.unpaidBalance ?? card.balance ?? 0;
+                    return (
+                      <option key={card.id} value={card.id}>
+                        {card.name} (Owed: RM {bal.toFixed(2)})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Paid From Account</label>
+                <select
+                  value={paidFromAccountId}
+                  onChange={(e) => setPaidFromAccountId(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-ink-bg border border-ink-border text-ink-text text-sm focus:outline-none focus:border-accent"
+                >
+                  {banks.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} (Balance: RM {(acc.balance || 0).toFixed(2)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Payment Amount (RM)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  required
+                  value={cardAmount}
+                  onChange={(e) => setCardAmount(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-ink-bg border border-ink-border text-ink-text text-sm focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Note (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Full statement payment"
+                  value={cardNote}
+                  onChange={(e) => setCardNote(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-ink-bg border border-ink-border text-ink-text text-sm focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCardModal(false)}
+                  className="w-1/2 py-3 rounded-xl bg-ink-bg text-ink-muted text-sm font-semibold border border-ink-border"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="w-1/2 py-3 rounded-xl bg-accent text-ink-bg text-sm font-bold active:scale-95 transition-transform">
+                  Record Payment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

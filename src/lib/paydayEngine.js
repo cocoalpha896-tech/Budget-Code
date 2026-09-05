@@ -12,9 +12,9 @@ export function getPeriodForDate(date, dayOfMonth) {
 }
 
 export function computeCCLiquidity(data) {
-  const uob = data.accounts.banks.find((b) => b.id === 'uob_savings');
+  const uob = data.accounts?.banks?.find((b) => b.id === 'uob_savings');
   const uobBalance = uob ? uob.balance : 0;
-  const ccTotal = data.accounts.creditCards.reduce((sum, c) => sum + (c.unpaidBalance || 0), 0);
+  const ccTotal = data.accounts?.creditCards?.reduce((sum, c) => sum + (c.unpaidBalance ?? c.balance ?? 0), 0) || 0;
   return uobBalance - ccTotal;
 }
 
@@ -74,4 +74,113 @@ export function rollPeriodIfNeeded(data) {
 export function daysUntil(dateIso) {
   const ms = new Date(dateIso).getTime() - Date.now();
   return Math.max(0, Math.ceil(ms / 86400000));
+}
+
+// Transfer funds between savings/investment accounts
+export function transferFunds(data, { fromAccountId, toAccountId, amount, note }) {
+  const numAmount = parseFloat(amount);
+  if (isNaN(numAmount) || numAmount <= 0) return data;
+
+  const next = structuredClone(data);
+
+  const sourceCat = Object.keys(next.accounts).find((cat) =>
+    next.accounts[cat].some((acc) => acc.id === fromAccountId)
+  );
+  if (sourceCat) {
+    next.accounts[sourceCat] = next.accounts[sourceCat].map((acc) =>
+      acc.id === fromAccountId ? { ...acc, balance: (acc.balance || 0) - numAmount } : acc
+    );
+  }
+
+  const destCat = Object.keys(next.accounts).find((cat) =>
+    next.accounts[cat].some((acc) => acc.id === toAccountId)
+  );
+  if (destCat) {
+    next.accounts[destCat] = next.accounts[destCat].map((acc) =>
+      acc.id === toAccountId ? { ...acc, balance: (acc.balance || 0) + numAmount } : acc
+    );
+  }
+
+  const newTransaction = {
+    id: Date.now().toString(),
+    date: new Date().toISOString(),
+    type: 'transfer',
+    fromAccountId,
+    toAccountId,
+    amount: numAmount,
+    note: note || 'Savings Allocation / Transfer',
+  };
+
+  next.transactions = [newTransaction, ...(next.transactions || [])];
+  return next;
+}
+
+// Pay credit card balance from a liquid bank account
+export function payCreditCard(data, { creditCardId, paidFromAccountId, amount, note }) {
+  const numAmount = parseFloat(amount);
+  if (isNaN(numAmount) || numAmount <= 0) return data;
+
+  const next = structuredClone(data);
+
+  const bankCat = Object.keys(next.accounts).find((cat) =>
+    next.accounts[cat].some((acc) => acc.id === paidFromAccountId)
+  );
+  if (bankCat) {
+    next.accounts[bankCat] = next.accounts[bankCat].map((acc) =>
+      acc.id === paidFromAccountId ? { ...acc, balance: (acc.balance || 0) - numAmount } : acc
+    );
+  }
+
+  if (next.accounts.creditCards) {
+    next.accounts.creditCards = next.accounts.creditCards.map((card) => {
+      if (card.id === creditCardId) {
+        const currentBal = card.unpaidBalance ?? card.balance ?? 0;
+        const newBal = Math.max(0, currentBal - numAmount);
+        return { ...card, balance: newBal, unpaidBalance: newBal };
+      }
+      return card;
+    });
+  }
+
+  const newTransaction = {
+    id: Date.now().toString(),
+    date: new Date().toISOString(),
+    type: 'cc_payment',
+    creditCardId,
+    paidFromAccountId,
+    amount: numAmount,
+    note: note || 'Credit Card Payment',
+  };
+
+  next.transactions = [newTransaction, ...(next.transactions || [])];
+  return next;
+}
+// Record incoming money into any bank/savings/investment account
+export function depositIncome(data, { accountId, amount, note }) {
+  const numAmount = parseFloat(amount);
+  if (isNaN(numAmount) || numAmount <= 0) return data;
+
+  const next = structuredClone(data);
+
+  const cat = Object.keys(next.accounts).find((key) =>
+    next.accounts[key].some((acc) => acc.id === accountId)
+  );
+
+  if (cat) {
+    next.accounts[cat] = next.accounts[cat].map((acc) =>
+      acc.id === accountId ? { ...acc, balance: (acc.balance || 0) + numAmount } : acc
+    );
+  }
+
+  const newTransaction = {
+    id: Date.now().toString(),
+    date: new Date().toISOString(),
+    type: 'income',
+    accountId,
+    amount: numAmount,
+    note: note || 'Incoming Money / Deposit',
+  };
+
+  next.transactions = [newTransaction, ...(next.transactions || [])];
+  return next;
 }

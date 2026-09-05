@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { initAuth, requestToken, getValidStoredToken, signOut as gSignOut } from './googleAuth';
 import { findBudgetFile, createBudgetFile, readBudgetFile, updateBudgetFile } from './driveApi';
 import { makeDefaultData, migrateData } from './defaultData';
-import { rollPeriodIfNeeded } from './paydayEngine';
+import { rollPeriodIfNeeded, transferFunds, payCreditCard, depositIncome } from './paydayEngine';
 
 const SAVE_DEBOUNCE_MS = 1500;
 
@@ -109,5 +109,28 @@ export function useBudgetStore() {
     });
   }, [getToken]);
 
-  return { status, error, data, updateData, signIn, signOut, syncState };
+  const executeTransfer = useCallback((params) => {
+    updateData((prev) => transferFunds(prev, params));
+  }, [updateData]);
+
+  const executeCardPayment = useCallback((params) => {
+    updateData((prev) => payCreditCard(prev, params));
+  }, [updateData]);
+
+  const executeIncome = useCallback((params) => {
+    updateData((prev) => depositIncome(prev, params));
+  }, [updateData]);
+
+  return {
+    status,
+    error,
+    data,
+    updateData,
+    signIn,
+    signOut,
+    syncState,
+    executeTransfer,
+    executeCardPayment,
+    executeIncome
+  };
 }
