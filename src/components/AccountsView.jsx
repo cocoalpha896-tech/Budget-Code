@@ -88,33 +88,10 @@ export default function AccountsView() {
   );
 
   return (
-    <div className="space-y-6 pb-24">
-      {/* Quick Action Header */}
+    <div className="space-y-6 pb-40">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-ink-text">Accounts</h2>
-        <div className="flex gap-1.5">
-          <button
-            onClick={handleOpenIncome}
-            className="flex items-center gap-1 px-2.5 py-2 text-xs font-semibold rounded-xl bg-status-good/20 text-status-good border border-status-good/30 active:scale-95 transition-transform"
-          >
-            <PlusCircle className="w-4 h-4" />
-            Income
-          </button>
-          <button
-            onClick={handleOpenTransfer}
-            className="flex items-center gap-1 px-2.5 py-2 text-xs font-semibold rounded-xl bg-ink-surface text-accent border border-ink-border active:scale-95 transition-transform"
-          >
-            <ArrowLeftRight className="w-4 h-4" />
-            Transfer
-          </button>
-          <button
-            onClick={() => handleOpenCardModal()}
-            className="flex items-center gap-1 px-2.5 py-2 text-xs font-semibold rounded-xl bg-accent text-ink-bg active:scale-95 transition-transform"
-          >
-            <CreditCard className="w-4 h-4" />
-            Pay Card
-          </button>
-        </div>
       </div>
 
       {/* Bank & Savings Accounts */}
@@ -184,7 +161,7 @@ export default function AccountsView() {
         </div>
       </section>
 
-      {/* --- ACCOUNT TRANSFER & ACTIVITY HISTORY --- */}
+      {/* Transfer & Account History */}
       <section className="space-y-3">
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-ink-muted">
           <History className="w-4 h-4 text-accent" />
@@ -221,10 +198,35 @@ export default function AccountsView() {
         )}
       </section>
 
+      {/* --- FLOATING BOTTOM ACTION BAR (THUMB ZONE) --- */}
+      <div className="fixed bottom-20 left-4 right-4 z-40 bg-ink-surface/95 backdrop-blur-md border border-ink-border p-2 rounded-2xl shadow-2xl flex gap-2">
+        <button
+          onClick={handleOpenIncome}
+          className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold rounded-xl bg-status-good/20 text-status-good border border-status-good/30 active:scale-95 transition-transform"
+        >
+          <PlusCircle className="w-4 h-4" />
+          Income
+        </button>
+        <button
+          onClick={handleOpenTransfer}
+          className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold rounded-xl bg-ink-bg text-accent border border-ink-border active:scale-95 transition-transform"
+        >
+          <ArrowLeftRight className="w-4 h-4" />
+          Transfer
+        </button>
+        <button
+          onClick={() => handleOpenCardModal()}
+          className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold rounded-xl bg-accent text-ink-bg active:scale-95 transition-transform shadow-md"
+        >
+          <CreditCard className="w-4 h-4" />
+          Pay Card
+        </button>
+      </div>
+
       {/* --- ADD INCOME MODAL --- */}
       {showIncomeModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5">
+          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5 animate-in fade-in slide-in-from-bottom duration-200">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-ink-text flex items-center gap-2">
                 <PlusCircle className="w-5 h-5 text-status-good" />
@@ -295,7 +297,7 @@ export default function AccountsView() {
       {/* --- TRANSFER MONEY MODAL --- */}
       {showTransferModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5">
+          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5 animate-in fade-in slide-in-from-bottom duration-200">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-ink-text flex items-center gap-2">
                 <ArrowLeftRight className="w-5 h-5 text-accent" />
@@ -383,7 +385,7 @@ export default function AccountsView() {
       {/* --- CREDIT CARD PAYMENT MODAL --- */}
       {showCardModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5">
+          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5 animate-in fade-in slide-in-from-bottom duration-200">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-ink-text flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-status-warn" />
