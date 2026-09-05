@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeftRight, CreditCard, PlusCircle, X, Building2, TrendingUp } from 'lucide-react';
+import { ArrowLeftRight, CreditCard, PlusCircle, X, Building2, TrendingUp, History } from 'lucide-react';
 import { useBudgetStore } from '../lib/useBudgetStore';
 
 export default function AccountsView() {
@@ -31,6 +31,10 @@ export default function AccountsView() {
   const creditCards = data?.accounts?.creditCards || [];
   const investments = data?.accounts?.investments || [];
   const depositAccounts = [...banks, ...investments];
+  const allAccounts = [...banks, ...creditCards, ...investments];
+
+  // Account lookup helper
+  const getAccountName = (id) => allAccounts.find((a) => a.id === id)?.name || id;
 
   // Open Handlers
   const handleOpenTransfer = () => {
@@ -78,6 +82,10 @@ export default function AccountsView() {
     executeIncome({ accountId: incomeAccountId, amount: parseFloat(incomeAmount), note: incomeNote });
     setShowIncomeModal(false);
   };
+
+  const accountTransactions = (data?.transactions || []).filter((tx) =>
+    ['transfer', 'cc_payment', 'income'].includes(tx.type)
+  );
 
   return (
     <div className="space-y-6 pb-24">
@@ -174,6 +182,43 @@ export default function AccountsView() {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* --- ACCOUNT TRANSFER & ACTIVITY HISTORY --- */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-ink-muted">
+          <History className="w-4 h-4 text-accent" />
+          Transfer & Account History
+        </div>
+
+        {accountTransactions.length === 0 ? (
+          <p className="text-xs text-ink-muted italic p-4 bg-ink-surface rounded-2xl border border-ink-border">
+            No transfers or account activity recorded yet.
+          </p>
+        ) : (
+          <div className="grid gap-2">
+            {accountTransactions.slice(0, 15).map((tx) => (
+              <div key={tx.id} className="flex items-center justify-between p-3.5 rounded-2xl bg-ink-surface border border-ink-border">
+                <div className="space-y-0.5">
+                  <p className="text-xs font-bold text-ink-text">
+                    {tx.type === 'transfer' && `Transfer: ${getAccountName(tx.fromAccountId)} → ${getAccountName(tx.toAccountId)}`}
+                    {tx.type === 'cc_payment' && `Card Pay: ${getAccountName(tx.paidFromAccountId)} → ${getAccountName(tx.creditCardId)}`}
+                    {tx.type === 'income' && `Income into ${getAccountName(tx.accountId)}`}
+                  </p>
+                  <p className="text-[10px] text-ink-muted">
+                    {new Date(tx.date).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    {tx.note && ` • ${tx.note}`}
+                  </p>
+                </div>
+                <p className={`text-sm font-bold ${
+                  tx.type === 'income' ? 'text-status-good' : tx.type === 'cc_payment' ? 'text-accent' : 'text-ink-text'
+                }`}>
+                  {tx.type === 'income' ? '+' : ''}RM {tx.amount.toFixed(2)}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* --- ADD INCOME MODAL --- */}

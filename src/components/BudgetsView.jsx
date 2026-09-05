@@ -1,114 +1,132 @@
-import { useState } from 'react';
-import QuickEntrySheet from './QuickEntrySheet';
-import { metaFor } from '../lib/categoryMeta';
+import React, { useState } from 'react';
+import { PieChart, Wallet, DollarSign } from 'lucide-react';
+import { useBudgetStore } from '../lib/useBudgetStore';
 
-function formatMYR(n) {
-  return `RM ${n.toLocaleString('en-MY', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-}
+export default function BudgetsView() {
+  const { data, updateData } = useBudgetStore();
+  const [editingId, setEditingId] = useState(null);
+  const [tempBudget, setTempBudget] = useState('');
 
-export default function BudgetsView({ data, updateData }) {
-  const [editingCategory, setEditingCategory] = useState(null);
-  const [editingSalary, setEditingSalary] = useState(false);
+  const categories = data?.categories || [];
 
-  const setBudgetCap = (amount) => {
-    updateData((prev) => ({
-      ...prev,
-      categories: prev.categories.map((c) =>
-        c.id === editingCategory.id ? { ...c, budget: amount } : c
-      ),
-    }));
+  // Totals calculations
+  const totalBudget = categories.reduce((sum, c) => sum + (Number(c.budget) || 0), 0);
+  const totalSpent = categories.reduce((sum, c) => sum + (Number(c.spent) || 0), 0);
+  const totalRemaining = totalBudget - totalSpent;
+  const overallPercent = totalBudget > 0 ? Math.min(100, Math.round((totalSpent / totalBudget) * 100)) : 0;
+
+  const handleEdit = (cat) => {
+    setEditingId(cat.id);
+    setTempBudget(cat.budget.toString());
   };
 
-  const setSalaryAmount = (amount) => {
+  const handleSave = (catId) => {
+    const val = parseFloat(tempBudget);
+    if (isNaN(val) || val < 0) return;
+
     updateData((prev) => ({
       ...prev,
-      payday: { ...prev.payday, salaryAmount: amount },
+      categories: prev.categories.map((c) => (c.id === catId ? { ...c, budget: val } : c)),
     }));
+    setEditingId(null);
   };
-
-  const targetAccountName =
-    data.accounts.banks.find((b) => b.id === data.payday.targetAccountId)?.name || 'Maybank Savings';
 
   return (
-    <div className="pb-24">
-      <div className="bg-gradient-to-br from-indigo-500/15 via-transparent to-transparent px-5 pt-6 pb-2 text-lg font-semibold text-ink-text">
-        Category budgets
-      </div>
-      <p className="px-5 pb-3 text-xs text-ink-muted">
-        Fixed per month — these only reset back to full spend-tracking when the payday
-        counter rolls over. Tap any category to change its cap.
-      </p>
+    <div className="space-y-6 pb-24">
+      <h2 className="text-xl font-bold text-ink-text">Category Budgets</h2>
 
-      {data.categories.map((c) => {
-        const { icon: Icon, color } = metaFor(c.id);
-        return (
-          <button
-            key={c.id}
-            onClick={() => setEditingCategory(c)}
-            className="flex w-full items-center justify-between border-b border-ink-border px-5 py-3.5 text-left active:bg-ink-surface"
-            style={{ borderLeft: `3px solid ${color}` }}
-          >
-            <span className="flex items-center gap-2 text-sm text-ink-text">
-              <span
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
-                style={{ backgroundColor: `${color}26` }}
-              >
-                <Icon size={14} color={color} strokeWidth={2.25} />
-              </span>
-              {c.name}
-            </span>
-            <span className="text-sm tabular-nums text-ink-muted">{formatMYR(c.budget)}</span>
-          </button>
-        );
-      })}
+      {/* --- TOTAL BUDGET SUMMARY HERO CARD --- */}
+      <div className="p-5 rounded-3xl bg-gradient-to-br from-ink-surface to-ink-bg border border-ink-border space-y-4 shadow-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-accent">
+            <PieChart className="w-4 h-4" />
+            Total Monthly Summary
+          </div>
+          <span className="text-xs font-bold text-ink-muted">{overallPercent}% Spent</span>
+        </div>
 
-      <div className="bg-gradient-to-br from-emerald-500/15 via-transparent to-transparent px-5 pt-8 pb-2 text-lg font-semibold text-ink-text">
-        Payday
-      </div>
-      <p className="px-5 pb-3 text-xs text-ink-muted">
-        On the {data.payday.dayOfMonth}
-        {ordinalSuffix(data.payday.dayOfMonth)} of every month, your salary lands in{' '}
-        {targetAccountName} and every category's spend counter resets to zero.
-      </p>
+        <div className="grid grid-cols-3 gap-2 text-center pt-1">
+          <div className="p-2.5 rounded-2xl bg-ink-bg/60 border border-ink-border/50">
+            <p className="text-[10px] font-semibold text-ink-muted uppercase">Total Budget</p>
+            <p className="text-sm font-bold text-ink-text mt-0.5">RM {totalBudget.toFixed(0)}</p>
+          </div>
+          <div className="p-2.5 rounded-2xl bg-ink-bg/60 border border-ink-border/50">
+            <p className="text-[10px] font-semibold text-ink-muted uppercase">Total Spent</p>
+            <p className="text-sm font-bold text-status-warn mt-0.5">RM {totalSpent.toFixed(0)}</p>
+          </div>
+          <div className="p-2.5 rounded-2xl bg-ink-bg/60 border border-ink-border/50">
+            <p className="text-[10px] font-semibold text-ink-muted uppercase">Remaining</p>
+            <p className={`text-sm font-bold mt-0.5 ${totalRemaining >= 0 ? 'text-status-good' : 'text-status-bad'}`}>
+              RM {totalRemaining.toFixed(0)}
+            </p>
+          </div>
+        </div>
 
-      <button
-        onClick={() => setEditingSalary(true)}
-        className="flex w-full items-center justify-between border-b border-ink-border px-5 py-3.5 text-left active:bg-ink-surface"
-      >
-        <span className="text-sm text-ink-text">Salary amount</span>
-        <span className="text-sm font-medium tabular-nums text-emerald-400">
-          {formatMYR(data.payday.salaryAmount)}
-        </span>
-      </button>
-
-      <div className="flex items-center justify-between px-5 py-3.5">
-        <span className="text-sm text-ink-muted">Goes into</span>
-        <span className="text-sm text-ink-text">{targetAccountName}</span>
+        {/* Progress Bar */}
+        <div className="w-full bg-ink-bg h-2.5 rounded-full overflow-hidden border border-ink-border/50">
+          <div
+            className={`h-full transition-all duration-300 ${
+              overallPercent > 90 ? 'bg-status-bad' : overallPercent > 75 ? 'bg-status-warn' : 'bg-accent'
+            }`}
+            style={{ width: `${overallPercent}%` }}
+          />
+        </div>
       </div>
 
-      <QuickEntrySheet
-        open={!!editingCategory}
-        title={`Set monthly cap — ${editingCategory?.name || ''}`}
-        confirmLabel="Save cap"
-        onConfirm={setBudgetCap}
-        onClose={() => setEditingCategory(null)}
-      />
+      {/* --- INDIVIDUAL CATEGORIES LIST --- */}
+      <div className="space-y-3">
+        {categories.map((cat) => {
+          const spent = Number(cat.spent) || 0;
+          const budget = Number(cat.budget) || 0;
+          const remaining = budget - spent;
+          const percent = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0;
 
-      <QuickEntrySheet
-        open={editingSalary}
-        title="Set monthly salary amount"
-        subtitle={`Deposited into ${targetAccountName} on the ${data.payday.dayOfMonth}${ordinalSuffix(data.payday.dayOfMonth)}`}
-        confirmLabel="Save amount"
-        onConfirm={setSalaryAmount}
-        onClose={() => setEditingSalary(false)}
-      />
+          return (
+            <div key={cat.id} className="p-4 rounded-2xl bg-ink-surface border border-ink-border space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-ink-text text-sm">{cat.name}</p>
+                  <p className="text-xs text-ink-muted">
+                    Spent RM {spent.toFixed(2)} • Remaining RM {remaining.toFixed(2)}
+                  </p>
+                </div>
+
+                {editingId === cat.id ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={tempBudget}
+                      onChange={(e) => setTempBudget(e.target.value)}
+                      className="w-20 p-1.5 rounded-lg bg-ink-bg border border-accent text-ink-text text-xs text-right focus:outline-none"
+                    />
+                    <button
+                      onClick={() => handleSave(cat.id)}
+                      className="px-2.5 py-1.5 rounded-lg bg-accent text-ink-bg text-xs font-bold"
+                    >
+                      Save
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleEdit(cat)}
+                    className="text-xs text-accent underline font-semibold"
+                  >
+                    RM {budget.toFixed(0)} Limit
+                  </button>
+                )}
+              </div>
+
+              {/* Progress Bar per Category */}
+              <div className="w-full bg-ink-bg h-1.5 rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${percent > 90 ? 'bg-status-bad' : percent > 75 ? 'bg-status-warn' : 'bg-accent'}`}
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
-}
-
-function ordinalSuffix(n) {
-  if (n === 1 || n === 21 || n === 31) return 'st';
-  if (n === 2 || n === 22) return 'nd';
-  if (n === 3 || n === 23) return 'rd';
-  return 'th';
 }
