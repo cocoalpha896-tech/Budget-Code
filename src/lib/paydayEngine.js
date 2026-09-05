@@ -11,11 +11,12 @@ export function getPeriodForDate(date, dayOfMonth) {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+// Net Liquidity: Sum of all Bank Accounts & Savings - Sum of all Credit Card Unpaid Balances
 export function computeCCLiquidity(data) {
-  const uob = data.accounts?.banks?.find((b) => b.id === 'uob_savings');
-  const uobBalance = uob ? uob.balance : 0;
-  const ccTotal = data.accounts?.creditCards?.reduce((sum, c) => sum + (c.unpaidBalance ?? c.balance ?? 0), 0) || 0;
-  return uobBalance - ccTotal;
+  if (!data?.accounts) return 0;
+  const bankTotal = data.accounts.banks?.reduce((sum, b) => sum + (b.balance || 0), 0) || 0;
+  const ccTotal = data.accounts.creditCards?.reduce((sum, c) => sum + (c.unpaidBalance ?? c.balance ?? 0), 0) || 0;
+  return bankTotal - ccTotal;
 }
 
 function formatPeriodLabel(startIso, endIso) {
@@ -25,8 +26,7 @@ function formatPeriodLabel(startIso, endIso) {
   return `${start} – ${end}`;
 }
 
-// Mutates and returns a plain updated copy of `data`. Loops in case the app
-// was closed across more than one payday (rare, but handled correctly).
+// Mutates and returns a plain updated copy of `data`.
 export function rollPeriodIfNeeded(data) {
   const today = new Date();
   const next = structuredClone(data);
@@ -37,7 +37,7 @@ export function rollPeriodIfNeeded(data) {
     return { data: next, changed: true };
   }
   if (!next.currentPeriod.transactions) {
-    next.currentPeriod.transactions = []; // migrate older saved files that predate this field
+    next.currentPeriod.transactions = [];
   }
 
   while (new Date(next.currentPeriod.end) <= today) {
@@ -57,10 +57,10 @@ export function rollPeriodIfNeeded(data) {
     const target = next.accounts.banks.find((a) => a.id === next.payday.targetAccountId);
     if (target) target.balance += Number(next.payday.salaryAmount) || 0;
 
-    // Reset category spend, keep the edited budget caps
+    // Reset category spend
     next.categories = next.categories.map((c) => ({ ...c, spent: 0 }));
 
-    // Advance to the following period
+    // Advance to following period
     const dayAfterOldEnd = new Date(new Date(next.currentPeriod.end).getTime() + 86400000);
     const newBounds = getPeriodForDate(dayAfterOldEnd, next.payday.dayOfMonth);
     next.currentPeriod = { start: next.currentPeriod.end, end: newBounds.end, transactions: [] };
@@ -155,6 +155,7 @@ export function payCreditCard(data, { creditCardId, paidFromAccountId, amount, n
   next.transactions = [newTransaction, ...(next.transactions || [])];
   return next;
 }
+
 // Record incoming money into any bank/savings/investment account
 export function depositIncome(data, { accountId, amount, note }) {
   const numAmount = parseFloat(amount);
