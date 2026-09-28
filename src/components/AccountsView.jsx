@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { ArrowLeftRight, CreditCard, PlusCircle, X, Building2, TrendingUp, History, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, CreditCard, PlusCircle, X, Building2, TrendingUp, History, Pencil, Trash2, Edit3 } from 'lucide-react';
 import { useBudgetStore } from '../lib/useBudgetStore';
 
 export default function AccountsView() {
-  const { data, executeTransfer, executeCardPayment, executeIncome, removeTransaction, modifyTransaction } = useBudgetStore();
+  const { data, executeTransfer, executeCardPayment, executeIncome, setAccountBalance, removeTransaction, modifyTransaction } = useBudgetStore();
 
   // Modal display states
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showCardModal, setShowCardModal] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [editingTx, setEditingTx] = useState(null);
+  const [editingAcc, setEditingAcc] = useState(null); // { id, name, currentBal }
 
   // Form states - Transfer
   const [fromAccountId, setFromAccountId] = useState('');
@@ -28,9 +29,12 @@ export default function AccountsView() {
   const [incomeAmount, setIncomeAmount] = useState('');
   const [incomeNote, setIncomeNote] = useState('');
 
-  // Edit modal states
+  // Edit transaction modal states
   const [editAmount, setEditAmount] = useState('');
   const [editNote, setEditNote] = useState('');
+
+  // Edit account balance modal state
+  const [newAccBalance, setNewAccBalance] = useState('');
 
   const banks = data?.accounts?.banks || [];
   const creditCards = data?.accounts?.creditCards || [];
@@ -62,6 +66,12 @@ export default function AccountsView() {
     setIncomeAmount('');
     setIncomeNote('');
     setShowIncomeModal(true);
+  };
+
+  const handleOpenEditAcc = (acc) => {
+    const bal = acc.unpaidBalance ?? acc.balance ?? 0;
+    setEditingAcc({ id: acc.id, name: acc.name, currentBal: bal });
+    setNewAccBalance(bal.toString());
   };
 
   const handleOpenEdit = (tx) => {
@@ -97,6 +107,13 @@ export default function AccountsView() {
     setShowIncomeModal(false);
   };
 
+  const onAccBalanceSubmit = (e) => {
+    e.preventDefault();
+    if (!editingAcc || newAccBalance === '') return;
+    setAccountBalance(editingAcc.id, parseFloat(newAccBalance));
+    setEditingAcc(null);
+  };
+
   const onEditSubmit = (e) => {
     e.preventDefault();
     if (!editingTx || !editAmount) return;
@@ -128,7 +145,9 @@ export default function AccountsView() {
             <div key={acc.id} className="flex items-center justify-between p-4 rounded-2xl bg-ink-surface border border-ink-border">
               <div>
                 <p className="font-semibold text-ink-text text-sm">{acc.name}</p>
-                <p className="text-xs text-ink-muted">Liquid Account</p>
+                <button onClick={() => handleOpenEditAcc(acc)} className="mt-1 text-xs text-accent flex items-center gap-1 font-medium">
+                  <Edit3 className="w-3 h-3" /> Adjust Balance
+                </button>
               </div>
               <p className="text-base font-bold text-status-good">
                 RM {(acc.balance || 0).toLocaleString('en-MY', { minimumFractionDigits: 2 })}
@@ -153,9 +172,14 @@ export default function AccountsView() {
               <div key={card.id} className="flex items-center justify-between p-4 rounded-2xl bg-ink-surface border border-ink-border">
                 <div>
                   <p className="font-semibold text-ink-text text-sm">{card.name}</p>
-                  <button onClick={() => handleOpenCardModal(card.id)} className="mt-1 text-xs text-accent underline font-medium">
-                    Pay off card
-                  </button>
+                  <div className="flex items-center gap-3 mt-1">
+                    <button onClick={() => handleOpenCardModal(card.id)} className="text-xs text-accent underline font-medium">
+                      Pay off card
+                    </button>
+                    <button onClick={() => handleOpenEditAcc(card)} className="text-xs text-ink-muted hover:text-ink-text flex items-center gap-1">
+                      <Edit3 className="w-3 h-3" /> Adjust
+                    </button>
+                  </div>
                 </div>
                 <p className="text-base font-bold text-status-bad">
                   RM {bal.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
@@ -175,7 +199,12 @@ export default function AccountsView() {
         <div className="grid gap-2">
           {investments.map((inv) => (
             <div key={inv.id} className="flex items-center justify-between p-4 rounded-2xl bg-ink-surface border border-ink-border">
-              <p className="font-semibold text-ink-text text-sm">{inv.name}</p>
+              <div>
+                <p className="font-semibold text-ink-text text-sm">{inv.name}</p>
+                <button onClick={() => handleOpenEditAcc(inv)} className="mt-1 text-xs text-accent flex items-center gap-1 font-medium">
+                  <Edit3 className="w-3 h-3" /> Adjust Balance
+                </button>
+              </div>
               <p className="text-base font-bold text-ink-text">
                 RM {(inv.balance || 0).toLocaleString('en-MY', { minimumFractionDigits: 2 })}
               </p>
@@ -244,6 +273,50 @@ export default function AccountsView() {
           Pay Card
         </button>
       </div>
+
+      {/* ADJUST ACCOUNT BALANCE MODAL */}
+      {editingAcc && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-ink-text flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-accent" />
+                Adjust Balance
+              </h3>
+              <button onClick={() => setEditingAcc(null)} className="p-2 rounded-full text-ink-muted hover:text-ink-text">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-ink-muted">
+              Update <strong className="text-ink-text">{editingAcc.name}</strong> to match your true current bank statement balance.
+            </p>
+
+            <form onSubmit={onAccBalanceSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-ink-muted mb-1">True Balance (RM)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={newAccBalance}
+                  onChange={(e) => setNewAccBalance(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-ink-bg border border-ink-border text-ink-text text-sm focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setEditingAcc(null)} className="w-1/2 py-3 rounded-xl bg-ink-bg text-ink-muted text-sm font-semibold border border-ink-border">
+                  Cancel
+                </button>
+                <button type="submit" className="w-1/2 py-3 rounded-xl bg-accent text-ink-bg text-sm font-bold active:scale-95 transition-transform">
+                  Save Exact Balance
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* EDIT TRANSACTION MODAL */}
       {editingTx && (
