@@ -1,17 +1,16 @@
-// Pure functions — no server/cron involved. The check runs client-side every
-// time the app is opened: "has today passed the current period's end date?"
+// Pure functions — no server/cron involved.
 
 export function getPeriodForDate(date, dayOfMonth) {
+  const dom = Number(dayOfMonth) || 27;
   const d = new Date(date);
-  let end = new Date(d.getFullYear(), d.getMonth(), dayOfMonth, 0, 0, 0);
+  let end = new Date(d.getFullYear(), d.getMonth(), dom, 0, 0, 0);
   if (end <= d) {
-    end = new Date(d.getFullYear(), d.getMonth() + 1, dayOfMonth, 0, 0, 0);
+    end = new Date(d.getFullYear(), d.getMonth() + 1, dom, 0, 0, 0);
   }
-  const start = new Date(end.getFullYear(), end.getMonth() - 1, dayOfMonth, 0, 0, 0);
+  const start = new Date(end.getFullYear(), end.getMonth() - 1, dom, 0, 0, 0);
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
-// Net Liquidity: Sum of all Bank Accounts & Savings - Sum of all Credit Card Unpaid Balances
 export function computeCCLiquidity(data) {
   if (!data?.accounts) return 0;
   const bankTotal = data.accounts.banks?.reduce((sum, b) => sum + (b.balance || 0), 0) || 0;
@@ -26,14 +25,20 @@ function formatPeriodLabel(startIso, endIso) {
   return `${start} – ${end}`;
 }
 
-// Mutates and returns a plain updated copy of `data`.
 export function rollPeriodIfNeeded(data) {
+  if (!data) return { data, changed: false };
   const today = new Date();
   const next = structuredClone(data);
   let changed = false;
 
+  if (!next.payday) {
+    next.payday = { dayOfMonth: 27, salaryAmount: 3700, targetAccountId: 'maybank_savings' };
+    changed = true;
+  }
+  const dayOfMonth = Number(next.payday.dayOfMonth) || 27;
+
   if (!next.currentPeriod?.start || !next.currentPeriod?.end) {
-    next.currentPeriod = { ...getPeriodForDate(today, next.payday.dayOfMonth), transactions: [] };
+    next.currentPeriod = { ...getPeriodForDate(today, dayOfMonth), transactions: [] };
     return { data: next, changed: true };
   }
   if (!next.currentPeriod.transactions) {
@@ -41,7 +46,9 @@ export function rollPeriodIfNeeded(data) {
   }
 
   while (new Date(next.currentPeriod.end) <= today) {
-    const totalSpent = next.categories.reduce((sum, c) => sum + c.spent, 0);
+    const totalSpent = next.categories.reduce((sum, c) => sum + (c.spent || 0), 0);
+
+    if (!next.history) next.history = [];
 
     next.history.unshift({
       period: formatPeriodLabel(next.currentPeriod.start, next.currentPeriod.end),
@@ -53,22 +60,60 @@ export function rollPeriodIfNeeded(data) {
       totalSpent,
     });
 
-    // Salary lands in one account only
-    const target = next.accounts.banks.find((a) => a.id === next.payday.targetAccountId);
-    if (target) target.balance += Number(next.payday.salaryAmount) || 0;
+    const target = next.accounts?.banks?.find((a) => a.id === (next.payday.targetAccountId || 'maybank_savings'));
+    if (target) {
+      target.balance = (target.balance || 0) + (Number(next.payday.salaryAmount) || 0);
+    }
 
-    // Reset category spend
     next.categories = next.categories.map((c) => ({ ...c, spent: 0 }));
 
-    // Advance to following period
     const dayAfterOldEnd = new Date(new Date(next.currentPeriod.end).getTime() + 86400000);
-    const newBounds = getPeriodForDate(dayAfterOldEnd, next.payday.dayOfMonth);
+    const newBounds = getPeriodForDate(dayAfterOldEnd, dayOfMonth);
     next.currentPeriod = { start: next.currentPeriod.end, end: newBounds.end, transactions: [] };
 
     changed = true;
   }
 
   return { data: next, changed };
+}
+
+export function forceRollPeriod(data) {
+  if (!data) return data;
+  const today = new Date();
+  const next = structuredClone(data);
+
+  if (!next.payday) {
+    next.payday = { dayOfMonth: 27, salaryAmount: 3700, targetAccountId: 'maybank_savings' };
+  }
+  const dayOfMonth = Number(next.payday.dayOfMonth) || 27;
+
+  const totalSpent = next.categories.reduce((sum, c) => sum + (c.spent || 0), 0);
+  if (!next.history) next.history = [];
+
+  const startIso = next.currentPeriod?.start || new Date(today.getFullYear(), today.getMonth() - 1, dayOfMonth).toISOString();
+  const endIso = today.toISOString();
+
+  next.history.unshift({
+    period: formatPeriodLabel(startIso, endIso),
+    start: startIso,
+    end: endIso,
+    categories: next.categories.map((c) => ({ ...c })),
+    transactions: (next.currentPeriod?.transactions || []).map((t) => ({ ...t })),
+    ccLiquidity: computeCCLiquidity(next),
+    totalSpent,
+  });
+
+  const target = next.accounts?.banks?.find((a) => a.id === (next.payday.targetAccountId || 'maybank_savings'));
+  if (target) {
+    target.balance = (target.balance || 0) + (Number(next.payday.salaryAmount) || 0);
+  }
+
+  next.categories = next.categories.map((c) => ({ ...c, spent: 0 }));
+
+  const newBounds = getPeriodForDate(new Date(today.getTime() + 86400000), dayOfMonth);
+  next.currentPeriod = { start: today.toISOString(), end: newBounds.end, transactions: [] };
+
+  return next;
 }
 
 export function daysUntil(dateIso) {
@@ -156,7 +201,7 @@ export function payCreditCard(data, { creditCardId, paidFromAccountId, amount, n
   return next;
 }
 
-// Record incoming money into any bank/savings/investment account
+// Record incoming money into any account
 export function depositIncome(data, { accountId, amount, note }) {
   const numAmount = parseFloat(amount);
   if (isNaN(numAmount) || numAmount <= 0) return data;
@@ -183,5 +228,171 @@ export function depositIncome(data, { accountId, amount, note }) {
   };
 
   next.transactions = [newTransaction, ...(next.transactions || [])];
+  return next;
+}
+
+// Helper: Reverses a transaction's effect on accounts and category totals
+function reverseTransactionEffect(data, tx) {
+  const next = structuredClone(data);
+  const amount = Number(tx.amount) || 0;
+
+  // 1. Standard spend
+  if (tx.categoryId || tx.type === 'spend') {
+    if (tx.categoryId) {
+      next.categories = next.categories.map((c) =>
+        c.id === tx.categoryId ? { ...c, spent: Math.max(0, (c.spent || 0) - amount) } : c
+      );
+    }
+    if (tx.accountId) {
+      Object.keys(next.accounts).forEach((catKey) => {
+        next.accounts[catKey] = next.accounts[catKey].map((acc) => {
+          if (acc.id === tx.accountId) {
+            if (catKey === 'creditCards') {
+              const newBal = Math.max(0, (acc.unpaidBalance ?? acc.balance ?? 0) - amount);
+              return { ...acc, balance: newBal, unpaidBalance: newBal };
+            } else {
+              return { ...acc, balance: (acc.balance || 0) + amount };
+            }
+          }
+          return acc;
+        });
+      });
+    }
+  }
+  // 2. Transfer
+  else if (tx.type === 'transfer') {
+    Object.keys(next.accounts).forEach((catKey) => {
+      next.accounts[catKey] = next.accounts[catKey].map((acc) => {
+        if (acc.id === tx.fromAccountId) return { ...acc, balance: (acc.balance || 0) + amount };
+        if (acc.id === tx.toAccountId) return { ...acc, balance: (acc.balance || 0) - amount };
+        return acc;
+      });
+    });
+  }
+  // 3. Credit Card Payment
+  else if (tx.type === 'cc_payment') {
+    Object.keys(next.accounts).forEach((catKey) => {
+      next.accounts[catKey] = next.accounts[catKey].map((acc) => {
+        if (acc.id === tx.paidFromAccountId) return { ...acc, balance: (acc.balance || 0) + amount };
+        if (acc.id === tx.creditCardId) {
+          const newBal = (acc.unpaidBalance ?? acc.balance ?? 0) + amount;
+          return { ...acc, balance: newBal, unpaidBalance: newBal };
+        }
+        return acc;
+      });
+    });
+  }
+  // 4. Income
+  else if (tx.type === 'income') {
+    Object.keys(next.accounts).forEach((catKey) => {
+      next.accounts[catKey] = next.accounts[catKey].map((acc) => {
+        if (acc.id === tx.accountId) return { ...acc, balance: (acc.balance || 0) - amount };
+        return acc;
+      });
+    });
+  }
+
+  return next;
+}
+
+// Delete a transaction completely
+export function deleteTransaction(data, txId) {
+  if (!data || !txId) return data;
+
+  const tx =
+    (data.transactions || []).find((t) => t.id === txId) ||
+    (data.currentPeriod?.transactions || []).find((t) => t.id === txId);
+
+  if (!tx) return data;
+
+  let next = reverseTransactionEffect(data, tx);
+
+  if (next.transactions) {
+    next.transactions = next.transactions.filter((t) => t.id !== txId);
+  }
+  if (next.currentPeriod?.transactions) {
+    next.currentPeriod.transactions = next.currentPeriod.transactions.filter((t) => t.id !== txId);
+  }
+
+  return next;
+}
+
+// Edit a transaction's amount, note, or account
+export function editTransaction(data, txId, updatedFields) {
+  if (!data || !txId) return data;
+
+  const tx =
+    (data.transactions || []).find((t) => t.id === txId) ||
+    (data.currentPeriod?.transactions || []).find((t) => t.id === txId);
+
+  if (!tx) return data;
+
+  // 1. Reverse old transaction effect
+  let next = reverseTransactionEffect(data, tx);
+
+  // 2. Build updated transaction
+  const updatedTx = {
+    ...tx,
+    ...updatedFields,
+    amount: parseFloat(updatedFields.amount) || 0,
+  };
+
+  const amount = updatedTx.amount;
+
+  // 3. Apply new effect
+  if (updatedTx.categoryId || updatedTx.type === 'spend') {
+    if (updatedTx.categoryId) {
+      next.categories = next.categories.map((c) =>
+        c.id === updatedTx.categoryId ? { ...c, spent: (c.spent || 0) + amount } : c
+      );
+    }
+    if (updatedTx.accountId) {
+      Object.keys(next.accounts).forEach((catKey) => {
+        next.accounts[catKey] = next.accounts[catKey].map((acc) => {
+          if (acc.id === updatedTx.accountId) {
+            if (catKey === 'creditCards') {
+              const newBal = (acc.unpaidBalance ?? acc.balance ?? 0) + amount;
+              return { ...acc, balance: newBal, unpaidBalance: newBal };
+            } else {
+              return { ...acc, balance: (acc.balance || 0) - amount };
+            }
+          }
+          return acc;
+        });
+      });
+    }
+  } else if (updatedTx.type === 'transfer') {
+    Object.keys(next.accounts).forEach((catKey) => {
+      next.accounts[catKey] = next.accounts[catKey].map((acc) => {
+        if (acc.id === updatedTx.fromAccountId) return { ...acc, balance: (acc.balance || 0) - amount };
+        if (acc.id === updatedTx.toAccountId) return { ...acc, balance: (acc.balance || 0) + amount };
+        return acc;
+      });
+    });
+  } else if (updatedTx.type === 'cc_payment') {
+    Object.keys(next.accounts).forEach((catKey) => {
+      next.accounts[catKey] = next.accounts[catKey].map((acc) => {
+        if (acc.id === updatedTx.paidFromAccountId) return { ...acc, balance: (acc.balance || 0) - amount };
+        if (acc.id === updatedTx.creditCardId) {
+          const newBal = Math.max(0, (acc.unpaidBalance ?? acc.balance ?? 0) - amount);
+          return { ...acc, balance: newBal, unpaidBalance: newBal };
+        }
+        return acc;
+      });
+    });
+  } else if (updatedTx.type === 'income') {
+    Object.keys(next.accounts).forEach((catKey) => {
+      next.accounts[catKey] = next.accounts[catKey].map((acc) => {
+        if (acc.id === updatedTx.accountId) return { ...acc, balance: (acc.balance || 0) + amount };
+        return acc;
+      });
+    });
+  }
+
+  // 4. Update transaction arrays
+  const updateArr = (arr) => (arr || []).map((t) => (t.id === txId ? updatedTx : t));
+  if (next.transactions) next.transactions = updateArr(next.transactions);
+  if (next.currentPeriod?.transactions) next.currentPeriod.transactions = updateArr(next.currentPeriod.transactions);
+
   return next;
 }
