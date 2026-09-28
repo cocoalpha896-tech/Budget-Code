@@ -231,12 +231,34 @@ export function depositIncome(data, { accountId, amount, note }) {
   return next;
 }
 
-// Helper: Reverses a transaction's effect on accounts and category totals
+// Directly overwrite an account's balance to fix errors
+export function adjustAccountBalance(data, { accountId, newBalance }) {
+  const num = parseFloat(newBalance);
+  if (isNaN(num)) return data;
+
+  const next = structuredClone(data);
+
+  Object.keys(next.accounts).forEach((catKey) => {
+    if (Array.isArray(next.accounts[catKey])) {
+      next.accounts[catKey] = next.accounts[catKey].map((acc) => {
+        if (acc.id === accountId) {
+          if (catKey === 'creditCards') {
+            return { ...acc, balance: num, unpaidBalance: num };
+          }
+          return { ...acc, balance: num };
+        }
+        return acc;
+      });
+    }
+  });
+
+  return next;
+}
+
 function reverseTransactionEffect(data, tx) {
   const next = structuredClone(data);
   const amount = Number(tx.amount) || 0;
 
-  // 1. Standard spend
   if (tx.categoryId || tx.type === 'spend') {
     if (tx.categoryId) {
       next.categories = next.categories.map((c) =>
@@ -258,9 +280,7 @@ function reverseTransactionEffect(data, tx) {
         });
       });
     }
-  }
-  // 2. Transfer
-  else if (tx.type === 'transfer') {
+  } else if (tx.type === 'transfer') {
     Object.keys(next.accounts).forEach((catKey) => {
       next.accounts[catKey] = next.accounts[catKey].map((acc) => {
         if (acc.id === tx.fromAccountId) return { ...acc, balance: (acc.balance || 0) + amount };
@@ -268,9 +288,7 @@ function reverseTransactionEffect(data, tx) {
         return acc;
       });
     });
-  }
-  // 3. Credit Card Payment
-  else if (tx.type === 'cc_payment') {
+  } else if (tx.type === 'cc_payment') {
     Object.keys(next.accounts).forEach((catKey) => {
       next.accounts[catKey] = next.accounts[catKey].map((acc) => {
         if (acc.id === tx.paidFromAccountId) return { ...acc, balance: (acc.balance || 0) + amount };
@@ -281,9 +299,7 @@ function reverseTransactionEffect(data, tx) {
         return acc;
       });
     });
-  }
-  // 4. Income
-  else if (tx.type === 'income') {
+  } else if (tx.type === 'income') {
     Object.keys(next.accounts).forEach((catKey) => {
       next.accounts[catKey] = next.accounts[catKey].map((acc) => {
         if (acc.id === tx.accountId) return { ...acc, balance: (acc.balance || 0) - amount };
@@ -295,7 +311,6 @@ function reverseTransactionEffect(data, tx) {
   return next;
 }
 
-// Delete a transaction completely
 export function deleteTransaction(data, txId) {
   if (!data || !txId) return data;
 
@@ -317,7 +332,6 @@ export function deleteTransaction(data, txId) {
   return next;
 }
 
-// Edit a transaction's amount, note, or account
 export function editTransaction(data, txId, updatedFields) {
   if (!data || !txId) return data;
 
@@ -327,10 +341,8 @@ export function editTransaction(data, txId, updatedFields) {
 
   if (!tx) return data;
 
-  // 1. Reverse old transaction effect
   let next = reverseTransactionEffect(data, tx);
 
-  // 2. Build updated transaction
   const updatedTx = {
     ...tx,
     ...updatedFields,
@@ -339,7 +351,6 @@ export function editTransaction(data, txId, updatedFields) {
 
   const amount = updatedTx.amount;
 
-  // 3. Apply new effect
   if (updatedTx.categoryId || updatedTx.type === 'spend') {
     if (updatedTx.categoryId) {
       next.categories = next.categories.map((c) =>
@@ -389,7 +400,6 @@ export function editTransaction(data, txId, updatedFields) {
     });
   }
 
-  // 4. Update transaction arrays
   const updateArr = (arr) => (arr || []).map((t) => (t.id === txId ? updatedTx : t));
   if (next.transactions) next.transactions = updateArr(next.transactions);
   if (next.currentPeriod?.transactions) next.currentPeriod.transactions = updateArr(next.currentPeriod.transactions);
