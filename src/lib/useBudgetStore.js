@@ -2,22 +2,29 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { initAuth, requestToken, getValidStoredToken, signOut as gSignOut } from './googleAuth';
 import { findBudgetFile, createBudgetFile, readBudgetFile, updateBudgetFile } from './driveApi';
 import { makeDefaultData, migrateData } from './defaultData';
-import { rollPeriodIfNeeded, transferFunds, payCreditCard, depositIncome } from './paydayEngine';
+import {
+  rollPeriodIfNeeded,
+  forceRollPeriod,
+  transferFunds,
+  payCreditCard,
+  depositIncome,
+  deleteTransaction,
+  editTransaction
+} from './paydayEngine';
 
 const SAVE_DEBOUNCE_MS = 1500;
 const LOCAL_CACHE_KEY = 'budget_pwa_cached_data';
 
 export function useBudgetStore() {
-  const [status, setStatus] = useState('init'); // init | signed-out | loading | ready | error
+  const [status, setStatus] = useState('init');
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
-  const [syncState, setSyncState] = useState('idle'); // idle | saving | saved | offline
+  const [syncState, setSyncState] = useState('idle');
 
   const fileIdRef = useRef(null);
   const tokenRef = useRef(null);
   const saveTimerRef = useRef(null);
 
-  // Backup to localStorage immediately whenever data updates
   useEffect(() => {
     if (data) {
       try {
@@ -34,7 +41,6 @@ export function useBudgetStore() {
     try {
       return await requestToken({ silent: true });
     } catch {
-      // iOS Safari ITP can block silent renewal — fall back to a visible prompt.
       return requestToken({ silent: false });
     }
   }, []);
@@ -60,14 +66,12 @@ export function useBudgetStore() {
 
       const { data: rolled, changed } = rollPeriodIfNeeded(loaded);
       
-      // Priority: use rolled Drive data
       setData(rolled);
       setStatus('ready');
       if (changed) {
         await updateBudgetFile(token, fileIdRef.current, rolled);
       }
     } catch (e) {
-      // Fallback to local device cache if Google Drive fetch fails
       const cached = localStorage.getItem(LOCAL_CACHE_KEY);
       if (cached) {
         try {
@@ -96,7 +100,6 @@ export function useBudgetStore() {
     setStatus('signed-out');
   }, []);
 
-  // Try silent resume on load (returning visitor)
   useEffect(() => {
     (async () => {
       await initAuth();
@@ -104,7 +107,6 @@ export function useBudgetStore() {
       if (stored) {
         await loadFromDrive();
       } else {
-        // Load local cache first if offline/unauthenticated
         const cached = localStorage.getItem(LOCAL_CACHE_KEY);
         if (cached) {
           try {
@@ -118,7 +120,6 @@ export function useBudgetStore() {
     })();
   }, [loadFromDrive]);
 
-  // Debounced autosave to Google Drive
   const updateData = useCallback((updater) => {
     setData((prev) => {
       const nextVal = typeof updater === 'function' ? updater(prev) : updater;
@@ -158,6 +159,18 @@ export function useBudgetStore() {
     updateData((prev) => depositIncome(prev, params));
   }, [updateData]);
 
+  const forcePaydayReset = useCallback(() => {
+    updateData((prev) => forceRollPeriod(prev));
+  }, [updateData]);
+
+  const removeTransaction = useCallback((txId) => {
+    updateData((prev) => deleteTransaction(prev, txId));
+  }, [updateData]);
+
+  const modifyTransaction = useCallback((txId, updatedFields) => {
+    updateData((prev) => editTransaction(prev, txId, updatedFields));
+  }, [updateData]);
+
   return {
     status,
     error,
@@ -168,6 +181,9 @@ export function useBudgetStore() {
     syncState,
     executeTransfer,
     executeCardPayment,
-    executeIncome
+    executeIncome,
+    forcePaydayReset,
+    removeTransaction,
+    modifyTransaction
   };
 }
