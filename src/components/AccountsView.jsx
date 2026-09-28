@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { ArrowLeftRight, CreditCard, PlusCircle, X, Building2, TrendingUp, History } from 'lucide-react';
+import { ArrowLeftRight, CreditCard, PlusCircle, X, Building2, TrendingUp, History, Pencil, Trash2 } from 'lucide-react';
 import { useBudgetStore } from '../lib/useBudgetStore';
 
 export default function AccountsView() {
-  const { data, executeTransfer, executeCardPayment, executeIncome } = useBudgetStore();
+  const { data, executeTransfer, executeCardPayment, executeIncome, removeTransaction, modifyTransaction } = useBudgetStore();
 
   // Modal display states
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showCardModal, setShowCardModal] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
+  const [editingTx, setEditingTx] = useState(null);
 
   // Form states - Transfer
   const [fromAccountId, setFromAccountId] = useState('');
@@ -27,16 +28,18 @@ export default function AccountsView() {
   const [incomeAmount, setIncomeAmount] = useState('');
   const [incomeNote, setIncomeNote] = useState('');
 
+  // Edit modal states
+  const [editAmount, setEditAmount] = useState('');
+  const [editNote, setEditNote] = useState('');
+
   const banks = data?.accounts?.banks || [];
   const creditCards = data?.accounts?.creditCards || [];
   const investments = data?.accounts?.investments || [];
   const depositAccounts = [...banks, ...investments];
   const allAccounts = [...banks, ...creditCards, ...investments];
 
-  // Account lookup helper
   const getAccountName = (id) => allAccounts.find((a) => a.id === id)?.name || id;
 
-  // Open Handlers
   const handleOpenTransfer = () => {
     setFromAccountId(banks[0]?.id || '');
     setToAccountId(investments[0]?.id || banks[1]?.id || '');
@@ -61,7 +64,18 @@ export default function AccountsView() {
     setShowIncomeModal(true);
   };
 
-  // Submit Handlers
+  const handleOpenEdit = (tx) => {
+    setEditingTx(tx);
+    setEditAmount(tx.amount.toString());
+    setEditNote(tx.note || '');
+  };
+
+  const handleDelete = (txId) => {
+    if (window.confirm("Are you sure you want to delete this transaction? Balance adjustments will be reversed.")) {
+      removeTransaction(txId);
+    }
+  };
+
   const onTransferSubmit = (e) => {
     e.preventDefault();
     if (!fromAccountId || !toAccountId || !transferAmount || fromAccountId === toAccountId) return;
@@ -83,13 +97,22 @@ export default function AccountsView() {
     setShowIncomeModal(false);
   };
 
+  const onEditSubmit = (e) => {
+    e.preventDefault();
+    if (!editingTx || !editAmount) return;
+    modifyTransaction(editingTx.id, {
+      amount: parseFloat(editAmount),
+      note: editNote
+    });
+    setEditingTx(null);
+  };
+
   const accountTransactions = (data?.transactions || []).filter((tx) =>
     ['transfer', 'cc_payment', 'income'].includes(tx.type)
   );
 
   return (
     <div className="space-y-6 pb-40">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-ink-text">Accounts</h2>
       </div>
@@ -176,57 +199,106 @@ export default function AccountsView() {
           <div className="grid gap-2">
             {accountTransactions.slice(0, 15).map((tx) => (
               <div key={tx.id} className="flex items-center justify-between p-3.5 rounded-2xl bg-ink-surface border border-ink-border">
-                <div className="space-y-0.5">
-                  <p className="text-xs font-bold text-ink-text">
+                <div className="space-y-0.5 max-w-[65%]">
+                  <p className="text-xs font-bold text-ink-text truncate">
                     {tx.type === 'transfer' && `Transfer: ${getAccountName(tx.fromAccountId)} → ${getAccountName(tx.toAccountId)}`}
                     {tx.type === 'cc_payment' && `Card Pay: ${getAccountName(tx.paidFromAccountId)} → ${getAccountName(tx.creditCardId)}`}
                     {tx.type === 'income' && `Income into ${getAccountName(tx.accountId)}`}
                   </p>
-                  <p className="text-[10px] text-ink-muted">
+                  <p className="text-[10px] text-ink-muted truncate">
                     {new Date(tx.date).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     {tx.note && ` • ${tx.note}`}
                   </p>
                 </div>
-                <p className={`text-sm font-bold ${
-                  tx.type === 'income' ? 'text-status-good' : tx.type === 'cc_payment' ? 'text-accent' : 'text-ink-text'
-                }`}>
-                  {tx.type === 'income' ? '+' : ''}RM {tx.amount.toFixed(2)}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className={`text-xs font-bold ${
+                    tx.type === 'income' ? 'text-status-good' : tx.type === 'cc_payment' ? 'text-accent' : 'text-ink-text'
+                  }`}>
+                    {tx.type === 'income' ? '+' : ''}RM {tx.amount.toFixed(2)}
+                  </p>
+                  <button onClick={() => handleOpenEdit(tx)} className="p-1 text-ink-muted hover:text-accent">
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => handleDelete(tx.id)} className="p-1 text-ink-muted hover:text-status-bad">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </section>
 
-      {/* --- FLOATING BOTTOM ACTION BAR (THUMB ZONE) --- */}
+      {/* Floating Action Bar */}
       <div className="fixed bottom-20 left-4 right-4 z-40 bg-ink-surface/95 backdrop-blur-md border border-ink-border p-2 rounded-2xl shadow-2xl flex gap-2">
-        <button
-          onClick={handleOpenIncome}
-          className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold rounded-xl bg-status-good/20 text-status-good border border-status-good/30 active:scale-95 transition-transform"
-        >
+        <button onClick={handleOpenIncome} className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold rounded-xl bg-status-good/20 text-status-good border border-status-good/30 active:scale-95 transition-transform">
           <PlusCircle className="w-4 h-4" />
           Income
         </button>
-        <button
-          onClick={handleOpenTransfer}
-          className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold rounded-xl bg-ink-bg text-accent border border-ink-border active:scale-95 transition-transform"
-        >
+        <button onClick={handleOpenTransfer} className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold rounded-xl bg-ink-bg text-accent border border-ink-border active:scale-95 transition-transform">
           <ArrowLeftRight className="w-4 h-4" />
           Transfer
         </button>
-        <button
-          onClick={() => handleOpenCardModal()}
-          className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold rounded-xl bg-accent text-ink-bg active:scale-95 transition-transform shadow-md"
-        >
+        <button onClick={() => handleOpenCardModal()} className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold rounded-xl bg-accent text-ink-bg active:scale-95 transition-transform shadow-md">
           <CreditCard className="w-4 h-4" />
           Pay Card
         </button>
       </div>
 
-      {/* --- ADD INCOME MODAL --- */}
+      {/* EDIT TRANSACTION MODAL */}
+      {editingTx && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-ink-text flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-accent" />
+                Edit Transaction
+              </h3>
+              <button onClick={() => setEditingTx(null)} className="p-2 rounded-full text-ink-muted hover:text-ink-text">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={onEditSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Amount (RM)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={editAmount}
+                  onChange={(e) => setEditAmount(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-ink-bg border border-ink-border text-ink-text text-sm focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Note / Description</label>
+                <input
+                  type="text"
+                  value={editNote}
+                  onChange={(e) => setEditNote(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-ink-bg border border-ink-border text-ink-text text-sm focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setEditingTx(null)} className="w-1/2 py-3 rounded-xl bg-ink-bg text-ink-muted text-sm font-semibold border border-ink-border">
+                  Cancel
+                </button>
+                <button type="submit" className="w-1/2 py-3 rounded-xl bg-accent text-ink-bg text-sm font-bold active:scale-95 transition-transform">
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* INCOME MODAL */}
       {showIncomeModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5 animate-in fade-in slide-in-from-bottom duration-200">
+          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-ink-text flex items-center gap-2">
                 <PlusCircle className="w-5 h-5 text-status-good" />
@@ -278,11 +350,7 @@ export default function AccountsView() {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowIncomeModal(false)}
-                  className="w-1/2 py-3 rounded-xl bg-ink-bg text-ink-muted text-sm font-semibold border border-ink-border"
-                >
+                <button type="button" onClick={() => setShowIncomeModal(false)} className="w-1/2 py-3 rounded-xl bg-ink-bg text-ink-muted text-sm font-semibold border border-ink-border">
                   Cancel
                 </button>
                 <button type="submit" className="w-1/2 py-3 rounded-xl bg-status-good text-ink-bg text-sm font-bold active:scale-95 transition-transform">
@@ -294,10 +362,10 @@ export default function AccountsView() {
         </div>
       )}
 
-      {/* --- TRANSFER MONEY MODAL --- */}
+      {/* TRANSFER MODAL */}
       {showTransferModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5 animate-in fade-in slide-in-from-bottom duration-200">
+          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-ink-text flex items-center gap-2">
                 <ArrowLeftRight className="w-5 h-5 text-accent" />
@@ -366,11 +434,7 @@ export default function AccountsView() {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowTransferModal(false)}
-                  className="w-1/2 py-3 rounded-xl bg-ink-bg text-ink-muted text-sm font-semibold border border-ink-border"
-                >
+                <button type="button" onClick={() => setShowTransferModal(false)} className="w-1/2 py-3 rounded-xl bg-ink-bg text-ink-muted text-sm font-semibold border border-ink-border">
                   Cancel
                 </button>
                 <button type="submit" className="w-1/2 py-3 rounded-xl bg-accent text-ink-bg text-sm font-bold active:scale-95 transition-transform">
@@ -382,10 +446,10 @@ export default function AccountsView() {
         </div>
       )}
 
-      {/* --- CREDIT CARD PAYMENT MODAL --- */}
+      {/* CREDIT CARD PAYMENT MODAL */}
       {showCardModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5 animate-in fade-in slide-in-from-bottom duration-200">
+          <div className="w-full max-w-md bg-ink-surface border border-ink-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-ink-text flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-status-warn" />
@@ -459,11 +523,7 @@ export default function AccountsView() {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCardModal(false)}
-                  className="w-1/2 py-3 rounded-xl bg-ink-bg text-ink-muted text-sm font-semibold border border-ink-border"
-                >
+                <button type="button" onClick={() => setShowCardModal(false)} className="w-1/2 py-3 rounded-xl bg-ink-bg text-ink-muted text-sm font-semibold border border-ink-border">
                   Cancel
                 </button>
                 <button type="submit" className="w-1/2 py-3 rounded-xl bg-accent text-ink-bg text-sm font-bold active:scale-95 transition-transform">
