@@ -53,6 +53,20 @@ export function migrateData(raw) {
   if (!raw) return makeDefaultData();
   const data = structuredClone(raw);
 
+  // Guarantee payday configuration object
+  if (!data.payday) {
+    data.payday = {
+      dayOfMonth: 27,
+      salaryAmount: 3700,
+      targetAccountId: 'maybank_savings'
+    };
+  } else {
+    data.payday.dayOfMonth = Number(data.payday.dayOfMonth) || 27;
+    data.payday.salaryAmount = Number(data.payday.salaryAmount) || 3700;
+    data.payday.targetAccountId = data.payday.targetAccountId || 'maybank_savings';
+  }
+
+  // Guarantee categories list
   if (!data.categories) {
     data.categories = defaultCategories;
   } else {
@@ -66,6 +80,36 @@ export function migrateData(raw) {
       if (!existingIds.includes(cat.id)) {
         data.categories.push(cat);
       }
+    });
+  }
+
+  // SELF-HEALING RECOVERY: Rebuild history transactions from global transactions array
+  if (Array.isArray(data.history) && Array.isArray(data.transactions) && data.transactions.length > 0) {
+    data.history = data.history.map((h) => {
+      const hStart = h.start ? new Date(h.start).getTime() : 0;
+      const hEnd = h.end ? new Date(h.end).getTime() : Date.now();
+
+      // Filter all global transactions that fall within this history period
+      const periodTxs = data.transactions.filter((tx) => {
+        if (!tx.date) return false;
+        const txTime = new Date(tx.date).getTime();
+        return txTime >= hStart && txTime <= hEnd;
+      });
+
+      // Merge into history without duplicates
+      const existingIds = new Set((h.transactions || []).map((t) => t.id));
+      const mergedTxs = [...(h.transactions || [])];
+
+      periodTxs.forEach((tx) => {
+        if (!existingIds.has(tx.id)) {
+          mergedTxs.push(tx);
+        }
+      });
+
+      return {
+        ...h,
+        transactions: mergedTxs
+      };
     });
   }
 
