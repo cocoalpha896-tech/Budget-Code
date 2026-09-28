@@ -75,7 +75,9 @@ export function useBudgetStore() {
       const cached = localStorage.getItem(LOCAL_CACHE_KEY);
       if (cached) {
         try {
-          setData(JSON.parse(cached));
+          // ALWAYS run migrateData on cached local storage as well
+          const migratedCached = migrateData(JSON.parse(cached));
+          setData(migratedCached);
           setStatus('ready');
           setSyncState('offline');
           return;
@@ -110,7 +112,9 @@ export function useBudgetStore() {
         const cached = localStorage.getItem(LOCAL_CACHE_KEY);
         if (cached) {
           try {
-            setData(JSON.parse(cached));
+            // Run migration on local cache during silent startup
+            const migratedCached = migrateData(JSON.parse(cached));
+            setData(migratedCached);
             setStatus('ready');
             return;
           } catch {}
