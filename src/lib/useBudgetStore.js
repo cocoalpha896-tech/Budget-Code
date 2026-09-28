@@ -8,6 +8,7 @@ import {
   transferFunds,
   payCreditCard,
   depositIncome,
+  adjustAccountBalance,
   deleteTransaction,
   editTransaction
 } from './paydayEngine';
@@ -75,7 +76,6 @@ export function useBudgetStore() {
       const cached = localStorage.getItem(LOCAL_CACHE_KEY);
       if (cached) {
         try {
-          // ALWAYS run migrateData on cached local storage as well
           const migratedCached = migrateData(JSON.parse(cached));
           setData(migratedCached);
           setStatus('ready');
@@ -112,7 +112,6 @@ export function useBudgetStore() {
         const cached = localStorage.getItem(LOCAL_CACHE_KEY);
         if (cached) {
           try {
-            // Run migration on local cache during silent startup
             const migratedCached = migrateData(JSON.parse(cached));
             setData(migratedCached);
             setStatus('ready');
@@ -163,6 +162,10 @@ export function useBudgetStore() {
     updateData((prev) => depositIncome(prev, params));
   }, [updateData]);
 
+  const setAccountBalance = useCallback((accountId, newBalance) => {
+    updateData((prev) => adjustAccountBalance(prev, { accountId, newBalance }));
+  }, [updateData]);
+
   const forcePaydayReset = useCallback(() => {
     updateData((prev) => forceRollPeriod(prev));
   }, [updateData]);
@@ -186,6 +189,7 @@ export function useBudgetStore() {
     executeTransfer,
     executeCardPayment,
     executeIncome,
+    setAccountBalance,
     forcePaydayReset,
     removeTransaction,
     modifyTransaction
